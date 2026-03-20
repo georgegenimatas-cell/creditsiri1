@@ -1,0 +1,39 @@
+import streamlit as st
+from models import factor_score, ml_risk_score, get_nav, macro_indicator, allocate_portfolio
+import pandas as pd
+
+st.set_page_config(page_title="CreditSiri Pro", layout="wide")
+st.title("💹 CreditSiri Pro — Hedge Fund Private Credit Portal")
+
+cmd = st.sidebar.selectbox("Command", [
+    "Long Candidates","Short Candidates","BDC Risk Scores",
+    "NAV Check","Macro Overlay","Portfolio Allocation"
+])
+
+if cmd=="Long Candidates":
+    df = factor_score()
+    top = df.sort_values("Score", ascending=False).head(5)
+    st.dataframe(top[["Ticker","Score"]])
+
+elif cmd=="Short Candidates":
+    df = factor_score()
+    bot = df.sort_values("Score").head(5)
+    st.dataframe(bot[["Ticker","Score"]])
+
+elif cmd=="BDC Risk Scores":
+    scr = ml_risk_score()
+    st.table(pd.DataFrame.from_dict(scr, orient='index', columns=["Risk Score"]))
+
+elif cmd=="NAV Check":
+    tk = st.text_input("Ticker","PSEC").upper()
+    val = get_nav(tk)
+    if val: st.write(f"{tk} NAV: {val}")
+    else: st.write("Unknown ticker")
+
+elif cmd=="Macro Overlay":
+    mac = macro_indicator()
+    st.write(pd.DataFrame([mac]))
+
+elif cmd=="Portfolio Allocation":
+    alloc = allocate_portfolio()
+    st.table(pd.DataFrame.from_dict(alloc, orient='index', columns=["Weight"]))
