@@ -1,0 +1,17 @@
+import pandas as pd
+import numpy as np
+from xgboost import XGBClassifier
+import joblib
+
+data=pd.DataFrame({
+    "PE":np.random.uniform(5,30,100),
+    "PB":np.random.uniform(0.5,3,100),
+    "ROE":np.random.uniform(0.05,0.25,100),
+    "Dividend":np.random.uniform(0,0.15,100),
+    "Stress":np.random.randint(0,2,100)
+})
+X=data[["PE","PB","ROE","Dividend"]]
+y=data["Stress"]
+model=XGBClassifier(use_label_encoder=False,eval_metric="logloss")
+model.fit(X,y)
+joblib.dump(model,"xgb_model.pkl")
