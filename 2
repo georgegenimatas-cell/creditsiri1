@@ -1,0 +1,65 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import joblib
+from xgboost import XGBClassifier
+
+asset_managers = ["APO","ARES","BX","KKR","OWL"]
+bdcs = ["ARCC","FSK","PSEC","MAIN","OCSL","TSLX"]
+universe = asset_managers + bdcs
+
+def factor_score():
+    data=[]
+    for t in universe:
+        info=yf.Ticker(t).info
+        data.append({"Ticker":t,
+                     "PE":info.get("forwardPE",20),
+                     "PB":info.get("priceToBook",1),
+                     "ROE":info.get("returnOnEquity",0.1),
+                     "Dividend":info.get("dividendYield",0)*100})
+    df=pd.DataFrame(data)
+    df["Value"]=1/df["PE"]
+    df["Quality"]=df["ROE"]
+    df["Risk"]=-df["Dividend"]
+    df["Score"]=0.5*df["Value"]+0.4*df["Quality"]+0.1*df["Risk"]
+    return df
+
+def ml_risk_score():
+    try:
+        model=joblib.load("xgb_model.pkl")
+    except:
+        # dummy model if not found
+        model=XGBClassifier(use_label_encoder=False,eval_metric="logloss")
+    scores={}
+    for t in bdcs:
+        info=yf.Ticker(t).info
+        features=pd.DataFrame({
+            "PE":[info.get("forwardPE",20)],
+            "PB":[info.get("priceToBook",1)],
+            "ROE":[info.get("returnOnEquity",0.1)],
+            "Dividend":[info.get("dividendYield",0)*100]})
+        scores[t]=float(model.predict_proba(features)[0,1]) if hasattr(model,"predict_proba") else 0.5
+    return scores
+
+def get_nav(ticker):
+    nav_vals={"ARCC":18.5,"FSK":26.3,"PSEC":6.8,"MAIN":50.2,"OCSL":16.7,"TSLX":21.4}
+    return nav_vals.get(ticker)
+
+def macro_indicator():
+    try:
+        dgs10=yf.download("^TNX",period="1y")["Adj Close"].iloc[-1]/100
+        h15=yf.download("^BAMLHYH0A0HYM2",period="1y")["Adj Close"].iloc[-1]/100
+        return {"10Y":dgs10,"HY":h15,"Risk Flag":(dgs10>0.045 or h15>0.08)}
+    except:
+        return {"10Y":None,"HY":None,"Risk Flag":False}
+
+def allocate_portfolio():
+    df=factor_score()
+    longs=df.sort_values("Score",ascending=False).head(5)
+    shorts=df.sort_values("Score").head(5)
+    alloc={}
+    lw=0.5/len(longs)
+    sw=-0.5/len(shorts)
+    for t in longs["Ticker"]: alloc[t]=round(lw,2)
+    for t in shorts["Ticker"]: alloc[t]=round(sw,2)
+    return alloc
